@@ -305,23 +305,37 @@ export class GMK67Driver {
     for (const key of GMK67_LAYOUT) {
       if (key.isKnob) continue;
       const custom = assignments[key.keyIndex];
-      if (!custom || custom.category === 0x05) continue;
+      if (!custom || custom.category === 0x00) continue;
 
       const offset = key.keyIndex * 4;
       if (offset + 3 < buffer.length - 2) {
-        if (custom.category === 0x03) {
-          buffer[offset] = 0x03;
-          buffer[offset + 1] = 0x00;
-          buffer[offset + 2] = (custom.modifiers ?? 0) & 0xff;
-          buffer[offset + 3] = custom.hidCode & 0xff;
-        } else if (custom.category === 0x00 && custom.hidCode === 0x00) {
+        if (custom.category === 0x05) {
+          // Disable Key (KC_NO -> [0x05, 0x03, 0x00, 0x00])
           buffer[offset] = 0x05;
           buffer[offset + 1] = 0x03;
           buffer[offset + 2] = 0x00;
           buffer[offset + 3] = 0x00;
+        } else if (custom.category === 0x03) {
+          // Multimedia Key: [0x03, consumerCode, 0x00, 0x00] (matches edx_1 == 6 in sub_4143f0)
+          buffer[offset] = 0x03;
+          buffer[offset + 1] = custom.hidCode & 0xff;
+          buffer[offset + 2] = 0x00;
+          buffer[offset + 3] = 0x00;
+        } else if (
+          custom.category === 0x02 &&
+          custom.hidCode >= 0xe0 &&
+          custom.hidCode <= 0xe7
+        ) {
+          // Modifier Key (0xE0..0xE7): sub_44c830 converts 0xE0..0xE7 to bitmask at offset + 1
+          const modBit = 1 << (custom.hidCode - 0xe0);
+          buffer[offset] = 0x02;
+          buffer[offset + 1] = ((custom.modifiers ?? 0) | modBit) & 0xff;
+          buffer[offset + 2] = 0x00;
+          buffer[offset + 3] = 0x00;
         } else {
+          // Standard Key: [0x02, modifierMask, hidCode, 0x00]
           buffer[offset] = custom.category & 0xff;
-          buffer[offset + 1] = custom.modifiers & 0xff;
+          buffer[offset + 1] = (custom.modifiers ?? 0) & 0xff;
           buffer[offset + 2] = custom.hidCode & 0xff;
           buffer[offset + 3] = 0x00;
         }
